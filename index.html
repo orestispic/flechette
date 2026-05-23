@@ -6,103 +6,163 @@
   <title>Score Fléchette</title>
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; min-height: 100%; background: #0f1115; font-family: Arial, Helvetica, sans-serif; overflow: hidden; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0f1115; font-family: Arial, Helvetica, sans-serif; }
     body { display: flex; justify-content: center; user-select: none; }
-    .app { width: 100%; max-width: 430px; min-height: 100dvh; padding: 24px 16px 12px; display: flex; flex-direction: column; background: radial-gradient(circle at top, #1a1f29 0%, #0f1115 60%); color: white; }
-    .top { height: 300px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
-    .history { height: 84px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; font-size: 24px; line-height: 1.15; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; }
-    .score { margin-top: 8px; font-size: 116px; line-height: .9; font-weight: 900; letter-spacing: -0.08em; font-variant-numeric: tabular-nums; text-shadow: 0 8px 30px rgba(255,255,255,.12); }
-    .current { height: 48px; margin-top: 28px; font-size: 26px; line-height: 1; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; }
-    .pad { margin-top: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px; }
-    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .bottom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 4px; }
+    .app {
+      width: 100%; max-width: 430px; height: 100svh; min-height: 100dvh;
+      padding: 12px 12px max(8px, env(safe-area-inset-bottom));
+      display: flex; flex-direction: column;
+      background: radial-gradient(circle at top, #1a1f29 0%, #0f1115 60%);
+      overflow: hidden;
+    }
+    .top { height: 205px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+    .history { height: 58px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; color: white; font-weight: 900; font-size: 19px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .history-line { text-align: center; }
+    .score { margin-top: 4px; color: white; font-weight: 900; font-size: 92px; line-height: .86; letter-spacing: -.08em; font-variant-numeric: tabular-nums; filter: drop-shadow(0 8px 30px rgba(255,255,255,.12)); }
+    .current { height: 30px; margin-top: 16px; color: white; font-size: 21px; line-height: 1; font-weight: 900; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .buttons { margin-top: auto; margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .bottom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; flex-shrink: 0; }
     button { border: 0; color: white; font-weight: 900; cursor: pointer; touch-action: manipulation; }
-    .num { height: 74px; border-radius: 24px; background: linear-gradient(to bottom, #34d058, #179637); border: 1px solid #53ef78; box-shadow: 0 10px 25px rgba(20,140,50,.45), inset 0 1px 0 rgba(255,255,255,.3); font-size: 25px; }
-    .erase { height: 74px; border-radius: 24px; background: linear-gradient(to bottom, #ff4d5d, #d90019); border: 1px solid #ff7b87; box-shadow: 0 10px 25px rgba(255,0,50,.4), inset 0 1px 0 rgba(255,255,255,.25); font-size: 48px; display: flex; align-items: center; justify-content: center; }
-    .new { height: 82px; border-radius: 28px; background: linear-gradient(to bottom, #ff4d5d, #d70018); border: 1px solid #ff7d88; box-shadow: 0 14px 30px rgba(255,0,40,.35), inset 0 1px 0 rgba(255,255,255,.25); font-size: 20px; letter-spacing: -0.02em; }
-    .enter { height: 82px; border-radius: 28px; background: linear-gradient(to bottom, #4f4dff, #1600d8); border: 1px solid #7f84ff; box-shadow: 0 14px 30px rgba(40,50,255,.4), inset 0 1px 0 rgba(255,255,255,.25); font-size: 30px; letter-spacing: -0.03em; }
     button:active { transform: scale(.95); filter: brightness(.9); }
-    .bottom button:active { transform: scale(.97); }
+    .num {
+      height: 54px; border-radius: 18px; font-size: 21px;
+      background: linear-gradient(to bottom, #34d058, #179637);
+      border: 1px solid #53ef78;
+      box-shadow: 0 10px 25px rgba(20,140,50,.45), inset 0 1px 0 rgba(255,255,255,.3);
+      transition: transform .15s, filter .15s;
+    }
+    .erase {
+      height: 54px; border-radius: 18px; font-size: 38px;
+      background: linear-gradient(to bottom, #ff4d5d, #d90019);
+      border: 1px solid #ff7b87;
+      box-shadow: 0 10px 25px rgba(255,0,50,.4), inset 0 1px 0 rgba(255,255,255,.25);
+      transition: transform .15s, filter .15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .new-game {
+      height: 58px; border-radius: 20px; font-size: 16px; letter-spacing: -.02em;
+      background: linear-gradient(to bottom, #ff4d5d, #d70018);
+      border: 1px solid #ff7d88;
+      box-shadow: 0 14px 30px rgba(255,0,40,.35), inset 0 1px 0 rgba(255,255,255,.25);
+      transition: transform .15s, filter .15s;
+    }
+    .enter {
+      height: 58px; border-radius: 20px; font-size: 24px; letter-spacing: -.03em;
+      background: linear-gradient(to bottom, #4f4dff, #1600d8);
+      border: 1px solid #7f84ff;
+      box-shadow: 0 14px 30px rgba(40,50,255,.4), inset 0 1px 0 rgba(255,255,255,.25);
+      transition: transform .15s, filter .15s;
+    }
+    .spacer { visibility: hidden; }
+
+    @media (max-height: 700px) {
+      .app { padding-top: 8px; }
+      .top { height: 175px; }
+      .history { height: 46px; font-size: 17px; }
+      .score { font-size: 78px; }
+      .current { height: 24px; margin-top: 10px; font-size: 18px; }
+      .buttons { gap: 6px; margin-bottom: 6px; }
+      .row, .bottom { gap: 6px; }
+      .num, .erase { height: 46px; border-radius: 15px; }
+      .new-game, .enter { height: 50px; border-radius: 17px; }
+    }
   </style>
 </head>
 <body>
   <main class="app">
     <section class="top">
-      <div class="history" id="history"></div>
-      <div class="score" id="score">301</div>
-      <div class="current" id="current"></div>
+      <div id="history" class="history"></div>
+      <div id="score" class="score">301</div>
+      <div id="current" class="current"></div>
     </section>
-    <section class="pad" id="pad"></section>
+
+    <section class="buttons">
+      <div class="row">
+        <div class="spacer"></div>
+        <button class="num" data-value="25">25</button>
+        <button class="num" data-value="50">50</button>
+        <button id="erase" class="erase" aria-label="Effacer">←</button>
+      </div>
+      <div class="row"><button class="num" data-value="1">1</button><button class="num" data-value="6">6</button><button class="num" data-value="11">11</button><button class="num" data-value="16">16</button></div>
+      <div class="row"><button class="num" data-value="2">2</button><button class="num" data-value="7">7</button><button class="num" data-value="12">12</button><button class="num" data-value="17">17</button></div>
+      <div class="row"><button class="num" data-value="3">3</button><button class="num" data-value="8">8</button><button class="num" data-value="13">13</button><button class="num" data-value="18">18</button></div>
+      <div class="row"><button class="num" data-value="4">4</button><button class="num" data-value="9">9</button><button class="num" data-value="14">14</button><button class="num" data-value="19">19</button></div>
+      <div class="row"><button class="num" data-value="5">5</button><button class="num" data-value="10">10</button><button class="num" data-value="15">15</button><button class="num" data-value="20">20</button></div>
+    </section>
+
     <div class="bottom">
-      <button class="new" id="newGame">Nouvelle Partie</button>
-      <button class="enter" id="enter">Entrée</button>
+      <button id="newGame" class="new-game">Nouvelle Partie</button>
+      <button id="enter" class="enter">Entrée</button>
     </div>
   </main>
+
   <script>
     const START_SCORE = 301;
     let score = START_SCORE;
     let currentThrow = [];
     let history = [];
+
     const scoreEl = document.getElementById('score');
     const currentEl = document.getElementById('current');
     const historyEl = document.getElementById('history');
-    const padEl = document.getElementById('pad');
-    const rows = [[25, 50], [1, 6, 11, 16], [2, 7, 12, 17], [3, 8, 13, 18], [4, 9, 14, 19], [5, 10, 15, 20]];
-    function total() { return currentThrow.reduce((a, b) => a + b, 0); }
+
     function render() {
       scoreEl.textContent = score;
       currentEl.textContent = currentThrow.length ? '-' + currentThrow.join('-') : '';
-      historyEl.innerHTML = history.length ? `<div>${history[0].line}</div><div>= ${history[0].total}</div>` : '';
+      historyEl.innerHTML = '';
+      if (history.length) {
+        const item = history[0];
+        const wrap = document.createElement('div');
+        wrap.className = 'history-line';
+        wrap.innerHTML = `<div>${item.line}</div><div>= ${item.total}</div>`;
+        historyEl.appendChild(wrap);
+      }
     }
+
     function addValue(value) {
       if (currentThrow.length >= 9) return;
       currentThrow.push(value);
       render();
     }
+
     function enterThrow() {
       if (!currentThrow.length) return;
-      const currentTotal = total();
-      if (currentTotal > score) return;
-      score -= currentTotal;
-      history = [{ line: '-' + currentThrow.join('-'), total: currentTotal, values: [...currentThrow] }];
+      const total = currentThrow.reduce((a, b) => a + b, 0);
+      if (total > score) return;
+      score -= total;
+      history = [{ line: '-' + currentThrow.join('-'), total, values: [...currentThrow] }];
       currentThrow = [];
       render();
     }
+
     function erase() {
       if (currentThrow.length) {
         currentThrow.pop();
-      } else if (history.length) {
-        const previous = history[0];
-        score = Math.min(START_SCORE, score + previous.total);
-        currentThrow = [...previous.values];
-        history = [];
+        render();
+        return;
       }
+      if (!history.length) return;
+      const previous = history[0];
+      score = Math.min(START_SCORE, score + previous.total);
+      currentThrow = [...previous.values];
+      history = [];
       render();
     }
+
     function newGame() {
       score = START_SCORE;
       currentThrow = [];
       history = [];
       render();
     }
-    rows.forEach((row, index) => {
-      const div = document.createElement('div');
-      div.className = 'grid4';
-      if (index === 0) {
-        div.appendChild(document.createElement('div'));
-        row.forEach(v => {
-          const b = document.createElement('button'); b.className = 'num'; b.textContent = v; b.onclick = () => addValue(v); div.appendChild(b);
-        });
-        const eraseBtn = document.createElement('button'); eraseBtn.className = 'erase'; eraseBtn.textContent = '←'; eraseBtn.onclick = erase; div.appendChild(eraseBtn);
-      } else {
-        row.forEach(v => {
-          const b = document.createElement('button'); b.className = 'num'; b.textContent = v; b.onclick = () => addValue(v); div.appendChild(b);
-        });
-      }
-      padEl.appendChild(div);
+
+    document.querySelectorAll('[data-value]').forEach((button) => {
+      button.addEventListener('click', () => addValue(Number(button.dataset.value)));
     });
-    document.getElementById('enter').onclick = enterThrow;
-    document.getElementById('newGame').onclick = newGame;
+    document.getElementById('enter').addEventListener('click', enterThrow);
+    document.getElementById('erase').addEventListener('click', erase);
+    document.getElementById('newGame').addEventListener('click', newGame);
     render();
   </script>
 </body>
