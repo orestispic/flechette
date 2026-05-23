@@ -24,7 +24,13 @@
     .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .bottom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; flex-shrink: 0; }
     button { border: 0; color: white; font-weight: 900; cursor: pointer; touch-action: manipulation; }
-    button:active { transform: scale(.95); filter: brightness(.9); }
+    button:active { transform: scale(.92); filter: brightness(1.18); }
+    button.tap-pop { animation: tapPop .18s ease-out; }
+    @keyframes tapPop {
+      0% { transform: scale(1); filter: brightness(1); }
+      45% { transform: scale(.9); filter: brightness(1.22); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
     .num {
       height: 54px; border-radius: 18px; font-size: 21px;
       background: linear-gradient(to bottom, #34d058, #179637);
@@ -107,6 +113,23 @@
     const currentEl = document.getElementById('current');
     const historyEl = document.getElementById('history');
 
+    function vibrate() {
+      if ('vibrate' in navigator) navigator.vibrate(12);
+    }
+
+    function animateButton(button) {
+      if (!button) return;
+      button.classList.remove('tap-pop');
+      void button.offsetWidth;
+      button.classList.add('tap-pop');
+      window.setTimeout(() => button.classList.remove('tap-pop'), 180);
+    }
+
+    function touchFeedback(button) {
+      vibrate();
+      animateButton(button);
+    }
+
     function render() {
       scoreEl.textContent = score;
       currentEl.textContent = currentThrow.length ? '-' + currentThrow.join('-') : '';
@@ -158,11 +181,23 @@
     }
 
     document.querySelectorAll('[data-value]').forEach((button) => {
-      button.addEventListener('click', () => addValue(Number(button.dataset.value)));
+      button.addEventListener('click', () => {
+        touchFeedback(button);
+        addValue(Number(button.dataset.value));
+      });
     });
-    document.getElementById('enter').addEventListener('click', enterThrow);
-    document.getElementById('erase').addEventListener('click', erase);
-    document.getElementById('newGame').addEventListener('click', newGame);
+    document.getElementById('enter').addEventListener('click', (event) => {
+      touchFeedback(event.currentTarget);
+      enterThrow();
+    });
+    document.getElementById('erase').addEventListener('click', (event) => {
+      touchFeedback(event.currentTarget);
+      erase();
+    });
+    document.getElementById('newGame').addEventListener('click', (event) => {
+      touchFeedback(event.currentTarget);
+      newGame();
+    });
     render();
   </script>
 </body>
