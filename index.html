@@ -108,7 +108,8 @@
       filter:brightness(1.06);
     }
 
-    .button:active{
+    .button:active,
+    .button.pressed{
       transform:scale(.86);
       filter:brightness(1.32);
       box-shadow:
@@ -363,6 +364,23 @@ function newGame(){
 
   updateUI();
 }
+
+
+document.querySelectorAll(".button").forEach((button) => {
+  button.addEventListener("touchstart", () => {
+    button.classList.add("pressed");
+  }, { passive:true });
+
+  button.addEventListener("touchend", () => {
+    setTimeout(() => {
+      button.classList.remove("pressed");
+    }, 90);
+  });
+
+  button.addEventListener("touchcancel", () => {
+    button.classList.remove("pressed");
+  });
+});
 
 updateUI();
 
