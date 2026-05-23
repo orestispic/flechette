@@ -96,9 +96,9 @@
       font-size:21px;
       font-weight:900;
       transition:
-        transform .08s ease,
-        filter .08s ease,
-        box-shadow .08s ease;
+        transform .035s ease-out,
+        filter .035s ease-out,
+        box-shadow .035s ease-out;
       transform:scale(1);
       cursor:pointer;
       will-change:transform;
@@ -374,7 +374,7 @@ document.querySelectorAll(".button").forEach((button) => {
   button.addEventListener("touchend", () => {
     setTimeout(() => {
       button.classList.remove("pressed");
-    }, 90);
+    }, 35);
   });
 
   button.addEventListener("touchcancel", () => {
