@@ -147,7 +147,8 @@
     }
 
     .status-row {
-      justify-content: flex-end;
+      justify-content: space-between;
+      gap: 10px;
     }
 
     .pill,
@@ -165,6 +166,42 @@
       font-size: 12px;
       font-weight: 700;
       white-space: nowrap;
+    }
+
+    .voice-toggle {
+      min-width: 104px;
+      gap: 8px;
+      color: #d9efff;
+      cursor: pointer;
+      transition: filter .14s ease, box-shadow .14s ease, transform .14s ease;
+    }
+
+    .voice-toggle:active,
+    .voice-toggle.pressed {
+      transform: translateY(1px);
+      filter: brightness(1.08);
+    }
+
+    .voice-toggle.listening {
+      border-color: rgba(83, 242, 206, .6);
+      color: #ecfffa;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.1),
+        0 0 18px rgba(64, 229, 186, .2);
+    }
+
+    .voice-toggle.error {
+      border-color: rgba(255, 114, 160, .55);
+      color: #ffd9e7;
+    }
+
+    .voice-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.92), rgba(165,214,255,.35));
+      box-shadow: 0 0 0 3px rgba(136, 190, 255, .12);
+      flex: 0 0 18px;
     }
 
     .score-wrap {
@@ -274,6 +311,7 @@
     }
 
     .button {
+      --press-glow: rgba(68, 232, 237, .3);
       position: relative;
       width: 100%;
       min-width: 0;
@@ -317,27 +355,32 @@
     .button:active,
     .button.pressed {
       transform: translateY(2px) scale(.972);
-      filter: brightness(1.06);
+      filter: brightness(1.08) saturate(1.08);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,.12),
-        0 6px 14px rgba(0, 0, 0, .2);
+        0 6px 14px rgba(0, 0, 0, .2),
+        0 0 18px var(--press-glow);
     }
 
     .green {
+      --press-glow: rgba(54, 242, 239, .34);
       background: linear-gradient(180deg, var(--teal-top), var(--teal-bottom));
     }
 
     .gold {
+      --press-glow: rgba(155, 109, 255, .38);
       border-color: rgba(170, 130, 255, .96);
       background: linear-gradient(180deg, var(--purple-top), var(--purple-bottom));
     }
 
     .red {
+      --press-glow: rgba(255, 85, 176, .38);
       border-color: rgba(255, 110, 200, .94);
       background: linear-gradient(180deg, var(--pink-top), var(--pink-bottom));
     }
 
     .blue {
+      --press-glow: rgba(39, 191, 252, .4);
       border-color: rgba(98, 208, 255, .92);
       background: linear-gradient(180deg, var(--cyan-top), var(--cyan-bottom));
     }
@@ -457,6 +500,12 @@
         font-size: 15px;
       }
 
+      .voice-toggle {
+        min-width: 92px;
+        padding: 0 10px;
+        font-size: 11px;
+      }
+
       .action-icon {
         width: 28px;
         height: 28px;
@@ -479,7 +528,11 @@
   <main class="app" aria-label="Compteur de score fléchette">
     <section class="scoreboard" aria-live="polite">
       <div class="status-row">
-        <div class="pill" id="lastThrow">301 départ</div>
+        <button class="pill voice-toggle" id="voiceToggle" type="button" aria-pressed="false">
+          <span class="voice-icon" aria-hidden="true"></span>
+          <span id="voiceLabel">Voix OFF</span>
+        </button>
+        <div class="pill" id="lastThrow">Aucune manche</div>
       </div>
 
       <div class="score-wrap">
@@ -557,17 +610,274 @@
     let history = null;
     let displayedScore = START_SCORE;
     let scoreAnimation = null;
+    let voiceEnabled = false;
+    let voiceListening = false;
+    let voiceRestartTimer = null;
+    let voiceTranscriptBuffer = "";
 
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
     const lastThrowEl = document.getElementById("lastThrow");
     const hintEl = document.getElementById("hint");
+    const voiceToggleEl = document.getElementById("voiceToggle");
+    const voiceLabelEl = document.getElementById("voiceLabel");
 
-    const supportsFineHaptics = "vibrate" in navigator;
+    const supportsFineHaptics = typeof navigator.vibrate === "function";
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    const supportsVoiceRecognition = typeof SpeechRecognitionCtor === "function";
+    const voiceRecognition = supportsVoiceRecognition ? new SpeechRecognitionCtor() : null;
+    const speechSynthesisSupported = "speechSynthesis" in window;
+
+    const NUMBER_WORDS = {
+      zero: 0,
+      un: 1,
+      une: 1,
+      deux: 2,
+      trois: 3,
+      quatre: 4,
+      cinq: 5,
+      six: 6,
+      sept: 7,
+      huit: 8,
+      neuf: 9,
+      dix: 10,
+      onze: 11,
+      douze: 12,
+      treize: 13,
+      quatorze: 14,
+      quinze: 15,
+      seize: 16,
+      dixsept: 17,
+      dixhuit: 18,
+      dixneuf: 19,
+      vingt: 20,
+      trente: 30,
+      quarante: 40,
+      cinquante: 50,
+      soixante: 60
+    };
+
+    if (voiceRecognition) {
+      voiceRecognition.lang = "fr-FR";
+      voiceRecognition.continuous = true;
+      voiceRecognition.interimResults = false;
+      voiceRecognition.maxAlternatives = 1;
+    }
 
     function vibrate(pattern = 12) {
       if (supportsFineHaptics) {
-        navigator.vibrate(pattern);
+        return navigator.vibrate(pattern);
+      }
+      return false;
+    }
+
+    function normalizeVoiceText(text) {
+      return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[.,;:!?]/g, " ")
+        .replace(/-/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function updateVoiceUI(status = "off") {
+      if (!voiceToggleEl || !voiceLabelEl) return;
+
+      voiceToggleEl.classList.remove("listening", "error");
+      voiceToggleEl.setAttribute("aria-pressed", voiceEnabled ? "true" : "false");
+
+      if (!supportsVoiceRecognition) {
+        voiceLabelEl.textContent = "Voix indispo";
+        voiceToggleEl.classList.add("error");
+        voiceToggleEl.disabled = true;
+        return;
+      }
+
+      if (status === "error") {
+        voiceLabelEl.textContent = "Voix erreur";
+        voiceToggleEl.classList.add("error");
+      } else if (voiceListening) {
+        voiceLabelEl.textContent = "Voix ON";
+        voiceToggleEl.classList.add("listening");
+      } else if (voiceEnabled) {
+        voiceLabelEl.textContent = "Voix veille";
+      } else {
+        voiceLabelEl.textContent = "Voix OFF";
+      }
+    }
+
+    function speak(text) {
+      if (!speechSynthesisSupported || !text) return;
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "fr-FR";
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function parseSpokenNumbers(tokens) {
+      const values = [];
+
+      for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index];
+        if (!token) continue;
+
+        if (/^\d+$/.test(token)) {
+          values.push(Number(token));
+          continue;
+        }
+
+        const combined = `${token}${tokens[index + 1] || ""}`;
+        if (NUMBER_WORDS[combined] !== undefined) {
+          values.push(NUMBER_WORDS[combined]);
+          index += 1;
+          continue;
+        }
+
+        if ((token === "vingt" || token === "cinquante") && tokens[index + 1] === "cinq") {
+          values.push(token === "vingt" ? 25 : 55);
+          index += 1;
+          continue;
+        }
+
+        if (NUMBER_WORDS[token] !== undefined) {
+          values.push(NUMBER_WORDS[token]);
+        }
+      }
+
+      return values;
+    }
+
+    function extractVoiceCommand(rawText) {
+      const normalized = normalizeVoiceText(rawText);
+      const wakeIndex = normalized.lastIndexOf("orestis score");
+      if (wakeIndex === -1) return null;
+
+      const commandText = normalized.slice(wakeIndex + "orestis score".length).trim();
+      if (!commandText) return null;
+
+      const tokens = commandText.split(" ");
+      const wantsEnter = /\b(entree|entrer|valide|valider)\b/.test(commandText);
+      const wantsErase = /\b(efface|effacer|annule|annuler|retour)\b/.test(commandText);
+      const wantsNewGame = /\b(nouvelle partie|nouvelle|reset|recommence)\b/.test(commandText);
+      const values = parseSpokenNumbers(tokens);
+
+      return {
+        rawText,
+        commandText,
+        values,
+        wantsEnter,
+        wantsErase,
+        wantsNewGame
+      };
+    }
+
+    function scheduleVoiceRestart() {
+      if (!voiceEnabled || !voiceRecognition) return;
+
+      window.clearTimeout(voiceRestartTimer);
+      voiceRestartTimer = window.setTimeout(() => {
+        try {
+          voiceRecognition.start();
+        } catch (error) {
+          updateVoiceUI("error");
+        }
+      }, 420);
+    }
+
+    function startVoiceRecognition() {
+      if (!voiceRecognition) {
+        updateVoiceUI("error");
+        return;
+      }
+
+      voiceEnabled = true;
+      window.localStorage.setItem("voiceWakeEnabled", "1");
+      try {
+        voiceRecognition.start();
+      } catch (error) {
+        updateVoiceUI("error");
+      }
+      updateVoiceUI();
+    }
+
+    function stopVoiceRecognition() {
+      voiceEnabled = false;
+      voiceListening = false;
+      voiceTranscriptBuffer = "";
+      window.clearTimeout(voiceRestartTimer);
+      window.localStorage.removeItem("voiceWakeEnabled");
+      if (voiceRecognition) {
+        try {
+          voiceRecognition.stop();
+        } catch (error) {
+          // noop
+        }
+      }
+      updateVoiceUI();
+    }
+
+    function executeVoiceCommand(command) {
+      if (!command) return;
+
+      if (command.wantsNewGame) {
+        newGame();
+        speak("Nouvelle partie. Trois cent un points.");
+        return;
+      }
+
+      if (command.wantsErase && !command.values.length) {
+        eraseValue();
+        speak("Dernière saisie effacée.");
+        return;
+      }
+
+      if (command.values.length) {
+        const availableSlots = MAX_VALUES - currentThrow.length;
+        if (availableSlots <= 0) {
+          setWarning("Maximum atteint");
+          flashCurrentWarning();
+          speak("Maximum atteint.");
+          return;
+        }
+
+        const valuesToAdd = command.values.slice(0, availableSlots);
+        valuesToAdd.forEach((value) => addValue(value));
+
+        if (command.values.length > valuesToAdd.length) {
+          setWarning("Maximum atteint");
+          flashCurrentWarning();
+          speak("Maximum atteint.");
+          return;
+        }
+      }
+
+      if (command.wantsEnter) {
+        if (!currentThrow.length) {
+          speak("Aucun score à entrer.");
+          return;
+        }
+
+        const announcedTotal = sum(currentThrow);
+        const remainingAfter = score - announcedTotal;
+        if (remainingAfter < 0) {
+          setWarning("Score impossible");
+          flashCurrentWarning();
+          speak(`Score impossible. Il reste ${score}.`);
+          return;
+        }
+
+        enterThrow();
+        speak(`${announcedTotal} points enregistrés. Il reste ${score}.`);
+        return;
+      }
+
+      if (command.values.length) {
+        speak(`${sum(currentThrow)} points sélectionnés.`);
       }
     }
 
@@ -642,9 +952,9 @@
         : "Tour vide";
 
       if (history) {
-        lastThrowEl.textContent = `${score} départ`;
+        lastThrowEl.textContent = `${formatThrow(history.values)} = ${history.total}`;
       } else {
-        lastThrowEl.textContent = `${score} départ`;
+        lastThrowEl.textContent = "Aucune manche";
       }
 
       if (projectedScore < 0) {
@@ -729,6 +1039,43 @@
       updateUI({ animateScore: true });
     }
 
+    if (voiceRecognition) {
+      voiceRecognition.onstart = () => {
+        voiceListening = true;
+        updateVoiceUI();
+      };
+
+      voiceRecognition.onend = () => {
+        voiceListening = false;
+        updateVoiceUI();
+        scheduleVoiceRestart();
+      };
+
+      voiceRecognition.onerror = () => {
+        voiceListening = false;
+        updateVoiceUI("error");
+        scheduleVoiceRestart();
+      };
+
+      voiceRecognition.onresult = (event) => {
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          if (!result.isFinal) continue;
+
+          voiceTranscriptBuffer = `${voiceTranscriptBuffer} ${result[0].transcript}`.trim();
+        }
+
+        const command = extractVoiceCommand(voiceTranscriptBuffer);
+        if (!command) {
+          voiceTranscriptBuffer = voiceTranscriptBuffer.slice(-180);
+          return;
+        }
+
+        voiceTranscriptBuffer = "";
+        executeVoiceCommand(command);
+      };
+    }
+
     document.addEventListener("click", (event) => {
       const button = event.target.closest("button");
       if (!button) return;
@@ -751,6 +1098,25 @@
       button.addEventListener("pointercancel", () => button.classList.remove("pressed"));
     });
 
+    if (voiceToggleEl) {
+      voiceToggleEl.addEventListener("click", () => {
+        if (voiceEnabled) {
+          stopVoiceRecognition();
+        } else {
+          startVoiceRecognition();
+        }
+      });
+    }
+
+    if (window.localStorage.getItem("voiceWakeEnabled") === "1" && voiceRecognition) {
+      const autoResumeVoice = () => {
+        document.removeEventListener("pointerdown", autoResumeVoice);
+        startVoiceRecognition();
+      };
+      document.addEventListener("pointerdown", autoResumeVoice, { once: true });
+    }
+
+    updateVoiceUI();
     updateUI();
   </script>
 </body>
