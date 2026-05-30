@@ -616,6 +616,8 @@
     let voicePausedForSpeech = false;
     let voiceRestartTimer = null;
     let speechResumeTimer = null;
+    let speechUnlocked = false;
+    let preferredVoice = null;
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
     const lastThrowEl = document.getElementById("lastThrow");
@@ -670,6 +672,28 @@
       voiceRecognition.maxAlternatives = 1;
     }
 
+    function pickPreferredVoice() {
+      if (!speechSynthesisSupported || typeof window.speechSynthesis.getVoices !== "function") {
+        return null;
+      }
+
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return null;
+
+      preferredVoice =
+        voices.find((voice) => /^fr[-_]/i.test(voice.lang) && /iphone|ios|siri|thomas|amelie|marie/i.test(`${voice.name} ${voice.voiceURI}`)) ||
+        voices.find((voice) => /^fr[-_]/i.test(voice.lang)) ||
+        voices[0];
+
+      return preferredVoice;
+    }
+
+    if (speechSynthesisSupported && typeof window.speechSynthesis.onvoiceschanged !== "undefined") {
+      window.speechSynthesis.onvoiceschanged = () => {
+        pickPreferredVoice();
+      };
+    }
+
     function vibrate(pattern = 12) {
       if (supportsFineHaptics) {
         return navigator.vibrate(pattern);
@@ -718,6 +742,29 @@
       }
     }
 
+    function unlockSpeechSynthesis() {
+      if (!speechSynthesisSupported || speechUnlocked) return;
+
+      pickPreferredVoice();
+
+      try {
+        const primer = new SpeechSynthesisUtterance(" ");
+        primer.lang = "fr-FR";
+        primer.volume = 0;
+        if (preferredVoice) {
+          primer.voice = preferredVoice;
+        }
+        window.speechSynthesis.cancel();
+        if (typeof window.speechSynthesis.resume === "function") {
+          window.speechSynthesis.resume();
+        }
+        window.speechSynthesis.speak(primer);
+        speechUnlocked = true;
+      } catch (error) {
+        speechUnlocked = false;
+      }
+    }
+
     function speak(text, options = {}) {
       if (!text) return false;
 
@@ -740,6 +787,7 @@
       }
 
       window.clearTimeout(speechResumeTimer);
+      pickPreferredVoice();
       window.speechSynthesis.cancel();
       if (typeof window.speechSynthesis.resume === "function") {
         window.speechSynthesis.resume();
@@ -749,6 +797,9 @@
       utterance.rate = 1;
       utterance.pitch = 1;
       utterance.volume = 1;
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
 
       const finishSpeechCycle = () => {
         window.clearTimeout(speechResumeTimer);
@@ -877,6 +928,7 @@
       voiceEnabled = true;
       window.localStorage.setItem("voiceWakeEnabled", "1");
       try {
+        unlockSpeechSynthesis();
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
