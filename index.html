@@ -612,6 +612,7 @@
     let scoreAnimation = null;
     let voiceEnabled = false;
     let voiceListening = false;
+    let voiceArmed = false;
     let voiceRestartTimer = null;
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
@@ -701,6 +702,9 @@
       if (status === "error") {
         voiceLabelEl.textContent = "Score erreur";
         voiceToggleEl.classList.add("error");
+      } else if (voiceListening && voiceArmed) {
+        voiceLabelEl.textContent = "Score prêt";
+        voiceToggleEl.classList.add("listening");
       } else if (voiceListening) {
         voiceLabelEl.textContent = "Score ON";
         voiceToggleEl.classList.add("listening");
@@ -728,11 +732,19 @@
 
       if (!token) return null;
 
+      if (token === "score") {
+        return { type: "arm", step: 1 };
+      }
+
       if (DIRECT_NUMBER_COMMANDS[token] !== undefined) {
         return { type: "value", value: DIRECT_NUMBER_COMMANDS[token], step: 1 };
       }
 
-      if (/^\d+$/.test(token)) {
+      if (/^\d$/.test(token)) {
+        return { type: "value", value: Number(token), step: 1 };
+      }
+
+      if (/^(1[0-9]|20|25|30|40|50|60)$/.test(token)) {
         return { type: "value", value: Number(token), step: 1 };
       }
 
@@ -823,6 +835,7 @@
     function stopVoiceRecognition() {
       voiceEnabled = false;
       voiceListening = false;
+      voiceArmed = false;
       window.clearTimeout(voiceRestartTimer);
       window.localStorage.removeItem("voiceWakeEnabled");
       if (voiceRecognition) {
@@ -839,7 +852,18 @@
       if (!actions.length) return;
 
       for (const action of actions) {
+        if (action.type === "arm") {
+          voiceArmed = true;
+          updateVoiceUI();
+          speak("J'écoute.");
+          continue;
+        }
+
         if (action.type === "value") {
+          if (!voiceArmed) {
+            continue;
+          }
+
           const availableSlots = MAX_VALUES - currentThrow.length;
           if (availableSlots <= 0) {
             setWarning("Maximum atteint");
@@ -853,6 +877,9 @@
         }
 
         if (action.type === "erase") {
+          if (!voiceArmed) {
+            continue;
+          }
           eraseValue();
           speak("Effacé.");
           continue;
@@ -860,11 +887,17 @@
 
         if (action.type === "new") {
           newGame();
+          voiceArmed = false;
+          updateVoiceUI();
           speak("Nouvelle partie. Trois cent un points.");
           continue;
         }
 
         if (action.type === "enter") {
+          if (!voiceArmed) {
+            continue;
+          }
+
           if (!currentThrow.length) {
             speak("Aucun score à entrer.");
             continue;
@@ -882,6 +915,8 @@
           }
 
           enterThrow();
+          voiceArmed = false;
+          updateVoiceUI();
           speak(`${announcedValues}. ${announcedTotal} points entrés. Nouveau score ${score}.`);
         }
       }
@@ -1042,6 +1077,8 @@
       score = START_SCORE;
       currentThrow = [];
       history = null;
+      voiceArmed = false;
+      updateVoiceUI();
       updateUI({ animateScore: true });
     }
 
