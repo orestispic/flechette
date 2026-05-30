@@ -74,8 +74,8 @@
       margin: 0 auto;
       padding: calc(14px + var(--safe-top)) 14px calc(18px + var(--safe-bottom));
       display: grid;
-      grid-template-rows: minmax(304px, 31svh) minmax(0, 1fr) auto;
-      gap: 16px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 12px;
       background:
         radial-gradient(circle at 12% 18%, rgba(62, 123, 255, .16), transparent 22%),
         radial-gradient(circle at 82% 34%, rgba(65, 219, 255, .08), transparent 28%),
@@ -100,6 +100,7 @@
       grid-template-rows: auto 1fr auto;
       min-height: 0;
       padding: 14px;
+      min-block-size: clamp(224px, 29svh, 292px);
       border: 1px solid var(--panel-line);
       border-radius: var(--radius-panel);
       background:
@@ -199,12 +200,12 @@
     }
 
     .meta-row {
-      gap: 10px;
-      justify-content: space-between;
+      gap: 0;
+      justify-content: flex-start;
     }
 
     .turn-line {
-      flex: 1 1 auto;
+      flex: 1 1 100%;
       min-width: 0;
       min-height: 36px;
       padding: 0 12px;
@@ -226,6 +227,13 @@
     .turn-line strong {
       font-weight: 700;
       color: #f8fbff;
+    }
+
+    .turn-line.warn {
+      color: #ffe0ea;
+      border-color: rgba(255, 100, 158, .55);
+      background: linear-gradient(180deg, rgba(104, 30, 68, .92), rgba(64, 18, 49, .9));
+      animation: shake .28s ease-in-out;
     }
 
     .hint {
@@ -269,7 +277,8 @@
       position: relative;
       width: 100%;
       min-width: 0;
-      min-height: 92px;
+      min-height: 0;
+      height: 100%;
       border: 1px solid rgba(68, 232, 237, .92);
       border-radius: var(--radius-key);
       display: inline-flex;
@@ -342,11 +351,12 @@
       display: grid;
       grid-template-columns: 1fr 1.08fr;
       gap: 10px;
-      min-height: 72px;
+      min-height: 68px;
     }
 
     .actions .button {
-      min-height: 72px;
+      min-height: 0;
+      height: 100%;
       font-size: clamp(16px, 4.4vw, 18px);
       justify-content: flex-start;
       padding: 0 20px;
@@ -406,17 +416,20 @@
 
     @media (max-height: 860px) {
       .app {
-        grid-template-rows: minmax(272px, 30svh) minmax(0, 1fr) auto;
         gap: 12px;
       }
 
+      .scoreboard {
+        min-block-size: clamp(214px, 28svh, 268px);
+      }
+
       .button {
-        min-height: 82px;
+        font-size: clamp(22px, 6.2vw, 27px);
       }
 
       .actions,
       .actions .button {
-        min-height: 66px;
+        min-height: 64px;
       }
     }
 
@@ -430,16 +443,24 @@
         padding: 12px;
       }
 
+      .keypad,
+      .row {
+        gap: 6px;
+      }
+
       .turn-line {
         font-size: 11px;
       }
 
-      .button {
-        min-height: 78px;
-      }
-
       .actions .button {
         padding: 0 16px;
+        font-size: 15px;
+      }
+
+      .action-icon {
+        width: 28px;
+        height: 28px;
+        flex-basis: 28px;
       }
     }
 
@@ -467,7 +488,7 @@
 
       <div class="meta-row">
         <div class="turn-line" id="current">Tour vide</div>
-        <div class="hint" id="hint">Reste 301</div>
+        <div class="sr-only" id="hint" aria-hidden="true">Reste 301</div>
       </div>
     </section>
 
@@ -598,6 +619,13 @@
       window.setTimeout(() => hintEl.classList.remove("warn"), 280);
     }
 
+    function flashCurrentWarning() {
+      currentEl.classList.remove("warn");
+      void currentEl.offsetWidth;
+      currentEl.classList.add("warn");
+      window.setTimeout(() => currentEl.classList.remove("warn"), 320);
+    }
+
     function updateUI(options = {}) {
       const total = sum(currentThrow);
       const projectedScore = score - total;
@@ -610,7 +638,7 @@
       }
 
       currentEl.innerHTML = currentThrow.length
-        ? `Tour <strong>${formatThrow(currentThrow)}</strong> = ${total}`
+        ? `<strong>${formatThrow(currentThrow)}</strong>`
         : "Tour vide";
 
       if (history) {
@@ -639,6 +667,7 @@
 
       if (currentThrow.length >= MAX_VALUES) {
         setWarning("Maximum atteint");
+        flashCurrentWarning();
         vibrate([8, 28, 8]);
         return;
       }
