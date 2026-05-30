@@ -754,10 +754,11 @@
 
     function extractVoiceCommand(rawText) {
       const normalized = normalizeVoiceText(rawText);
-      const wakeIndex = normalized.lastIndexOf("orestis score");
-      if (wakeIndex === -1) return null;
+      const wakeMatch = normalized.match(/(?:^|\s)score(?:\s|$)/);
+      if (!wakeMatch) return null;
 
-      const commandText = normalized.slice(wakeIndex + "orestis score".length).trim();
+      const wakeIndex = wakeMatch.index + wakeMatch[0].indexOf("score");
+      const commandText = normalized.slice(wakeIndex + "score".length).trim();
       if (!commandText) return null;
 
       const tokens = commandText.split(" ");
