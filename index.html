@@ -530,7 +530,7 @@
       <div class="status-row">
         <button class="pill voice-toggle" id="voiceToggle" type="button" aria-pressed="false">
           <span class="voice-icon" aria-hidden="true"></span>
-          <span id="voiceLabel">Voix OFF</span>
+          <span id="voiceLabel">Score OFF</span>
         </button>
         <div class="pill" id="lastThrow">Aucune manche</div>
       </div>
@@ -613,8 +613,6 @@
     let voiceEnabled = false;
     let voiceListening = false;
     let voiceRestartTimer = null;
-    let voiceTranscriptBuffer = "";
-
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
     const lastThrowEl = document.getElementById("lastThrow");
@@ -657,6 +655,11 @@
       soixante: 60
     };
 
+    const DIRECT_NUMBER_COMMANDS = {
+      bull: 25,
+      centre: 50
+    };
+
     if (voiceRecognition) {
       voiceRecognition.lang = "fr-FR";
       voiceRecognition.continuous = true;
@@ -689,22 +692,22 @@
       voiceToggleEl.setAttribute("aria-pressed", voiceEnabled ? "true" : "false");
 
       if (!supportsVoiceRecognition) {
-        voiceLabelEl.textContent = "Voix indispo";
+        voiceLabelEl.textContent = "Score indispo";
         voiceToggleEl.classList.add("error");
         voiceToggleEl.disabled = true;
         return;
       }
 
       if (status === "error") {
-        voiceLabelEl.textContent = "Voix erreur";
+        voiceLabelEl.textContent = "Score erreur";
         voiceToggleEl.classList.add("error");
       } else if (voiceListening) {
-        voiceLabelEl.textContent = "Voix ON";
+        voiceLabelEl.textContent = "Score ON";
         voiceToggleEl.classList.add("listening");
       } else if (voiceEnabled) {
-        voiceLabelEl.textContent = "Voix veille";
+        voiceLabelEl.textContent = "Score veille";
       } else {
-        voiceLabelEl.textContent = "Voix OFF";
+        voiceLabelEl.textContent = "Score OFF";
       }
     }
 
@@ -719,62 +722,70 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    function parseSpokenNumbers(tokens) {
-      const values = [];
+    function parseVoiceToken(tokens, index) {
+      const token = tokens[index];
+      const nextToken = tokens[index + 1] || "";
+
+      if (!token) return null;
+
+      if (DIRECT_NUMBER_COMMANDS[token] !== undefined) {
+        return { type: "value", value: DIRECT_NUMBER_COMMANDS[token], step: 1 };
+      }
+
+      if (/^\d+$/.test(token)) {
+        return { type: "value", value: Number(token), step: 1 };
+      }
+
+      const combined = `${token}${nextToken}`;
+      if (NUMBER_WORDS[combined] !== undefined) {
+        return { type: "value", value: NUMBER_WORDS[combined], step: 2 };
+      }
+
+      if ((token === "vingt" || token === "cinquante") && nextToken === "cinq") {
+        return { type: "value", value: token === "vingt" ? 25 : 55, step: 2 };
+      }
+
+      if (NUMBER_WORDS[token] !== undefined) {
+        return { type: "value", value: NUMBER_WORDS[token], step: 1 };
+      }
+
+      if (["entree", "entrer", "valide", "valider"].includes(token)) {
+        return { type: "enter", step: 1 };
+      }
+
+      if (["efface", "effacer", "annule", "annuler", "retour"].includes(token)) {
+        return { type: "erase", step: 1 };
+      }
+
+      if (token === "nouvelle" && nextToken === "partie") {
+        return { type: "new", step: 2 };
+      }
+
+      if (["nouvelle", "reset", "recommence"].includes(token)) {
+        return { type: "new", step: 1 };
+      }
+
+      return null;
+    }
+
+    function parseVoicePhrase(rawText) {
+      const normalized = normalizeVoiceText(rawText);
+      if (!normalized) return [];
+
+      const tokens = normalized.split(" ");
+      const actions = [];
 
       for (let index = 0; index < tokens.length; index += 1) {
-        const token = tokens[index];
-        if (!token) continue;
+        const action = parseVoiceToken(tokens, index);
+        if (!action) continue;
 
-        if (/^\d+$/.test(token)) {
-          values.push(Number(token));
-          continue;
-        }
-
-        const combined = `${token}${tokens[index + 1] || ""}`;
-        if (NUMBER_WORDS[combined] !== undefined) {
-          values.push(NUMBER_WORDS[combined]);
+        actions.push(action);
+        if (action.step === 2) {
           index += 1;
-          continue;
-        }
-
-        if ((token === "vingt" || token === "cinquante") && tokens[index + 1] === "cinq") {
-          values.push(token === "vingt" ? 25 : 55);
-          index += 1;
-          continue;
-        }
-
-        if (NUMBER_WORDS[token] !== undefined) {
-          values.push(NUMBER_WORDS[token]);
         }
       }
 
-      return values;
-    }
-
-    function extractVoiceCommand(rawText) {
-      const normalized = normalizeVoiceText(rawText);
-      const wakeMatch = normalized.match(/(?:^|\s)score(?:\s|$)/);
-      if (!wakeMatch) return null;
-
-      const wakeIndex = wakeMatch.index + wakeMatch[0].indexOf("score");
-      const commandText = normalized.slice(wakeIndex + "score".length).trim();
-      if (!commandText) return null;
-
-      const tokens = commandText.split(" ");
-      const wantsEnter = /\b(entree|entrer|valide|valider)\b/.test(commandText);
-      const wantsErase = /\b(efface|effacer|annule|annuler|retour)\b/.test(commandText);
-      const wantsNewGame = /\b(nouvelle partie|nouvelle|reset|recommence)\b/.test(commandText);
-      const values = parseSpokenNumbers(tokens);
-
-      return {
-        rawText,
-        commandText,
-        values,
-        wantsEnter,
-        wantsErase,
-        wantsNewGame
-      };
+      return actions;
     }
 
     function scheduleVoiceRestart() {
@@ -799,6 +810,9 @@
       voiceEnabled = true;
       window.localStorage.setItem("voiceWakeEnabled", "1");
       try {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
         voiceRecognition.start();
       } catch (error) {
         updateVoiceUI("error");
@@ -809,7 +823,6 @@
     function stopVoiceRecognition() {
       voiceEnabled = false;
       voiceListening = false;
-      voiceTranscriptBuffer = "";
       window.clearTimeout(voiceRestartTimer);
       window.localStorage.removeItem("voiceWakeEnabled");
       if (voiceRecognition) {
@@ -822,63 +835,55 @@
       updateVoiceUI();
     }
 
-    function executeVoiceCommand(command) {
-      if (!command) return;
+    function executeVoiceActions(actions) {
+      if (!actions.length) return;
 
-      if (command.wantsNewGame) {
-        newGame();
-        speak("Nouvelle partie. Trois cent un points.");
-        return;
-      }
+      for (const action of actions) {
+        if (action.type === "value") {
+          const availableSlots = MAX_VALUES - currentThrow.length;
+          if (availableSlots <= 0) {
+            setWarning("Maximum atteint");
+            flashCurrentWarning();
+            speak("Maximum atteint.");
+            return;
+          }
 
-      if (command.wantsErase && !command.values.length) {
-        eraseValue();
-        speak("Dernière saisie effacée.");
-        return;
-      }
-
-      if (command.values.length) {
-        const availableSlots = MAX_VALUES - currentThrow.length;
-        if (availableSlots <= 0) {
-          setWarning("Maximum atteint");
-          flashCurrentWarning();
-          speak("Maximum atteint.");
-          return;
+          addValue(action.value);
+          continue;
         }
 
-        const valuesToAdd = command.values.slice(0, availableSlots);
-        valuesToAdd.forEach((value) => addValue(value));
-
-        if (command.values.length > valuesToAdd.length) {
-          setWarning("Maximum atteint");
-          flashCurrentWarning();
-          speak("Maximum atteint.");
-          return;
-        }
-      }
-
-      if (command.wantsEnter) {
-        if (!currentThrow.length) {
-          speak("Aucun score à entrer.");
-          return;
+        if (action.type === "erase") {
+          eraseValue();
+          speak("Effacé.");
+          continue;
         }
 
-        const announcedTotal = sum(currentThrow);
-        const remainingAfter = score - announcedTotal;
-        if (remainingAfter < 0) {
-          setWarning("Score impossible");
-          flashCurrentWarning();
-          speak(`Score impossible. Il reste ${score}.`);
-          return;
+        if (action.type === "new") {
+          newGame();
+          speak("Nouvelle partie. Trois cent un points.");
+          continue;
         }
 
-        enterThrow();
-        speak(`${announcedTotal} points enregistrés. Il reste ${score}.`);
-        return;
-      }
+        if (action.type === "enter") {
+          if (!currentThrow.length) {
+            speak("Aucun score à entrer.");
+            continue;
+          }
 
-      if (command.values.length) {
-        speak(`${sum(currentThrow)} points sélectionnés.`);
+          const announcedValues = formatThrow(currentThrow);
+          const announcedTotal = sum(currentThrow);
+          const remainingAfter = score - announcedTotal;
+
+          if (remainingAfter < 0) {
+            setWarning("Score impossible");
+            flashCurrentWarning();
+            speak(`Score impossible. Il reste ${score}.`);
+            continue;
+          }
+
+          enterThrow();
+          speak(`${announcedValues}. ${announcedTotal} points entrés. Nouveau score ${score}.`);
+        }
       }
     }
 
@@ -1063,17 +1068,8 @@
           const result = event.results[index];
           if (!result.isFinal) continue;
 
-          voiceTranscriptBuffer = `${voiceTranscriptBuffer} ${result[0].transcript}`.trim();
+          executeVoiceActions(parseVoicePhrase(result[0].transcript));
         }
-
-        const command = extractVoiceCommand(voiceTranscriptBuffer);
-        if (!command) {
-          voiceTranscriptBuffer = voiceTranscriptBuffer.slice(-180);
-          return;
-        }
-
-        voiceTranscriptBuffer = "";
-        executeVoiceCommand(command);
       };
     }
 
