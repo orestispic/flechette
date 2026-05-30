@@ -744,6 +744,17 @@
         return { type: "value", value: Number(token), step: 1 };
       }
 
+      if (/^2[1-9]$/.test(token) && token !== "25") {
+        return {
+          type: "sequence",
+          actions: [
+            { type: "value", value: 20 },
+            { type: "value", value: Number(token[1]) }
+          ],
+          step: 1
+        };
+      }
+
       if (/^(1[0-9]|20|25|30|40|50|60)$/.test(token)) {
         return { type: "value", value: Number(token), step: 1 };
       }
@@ -791,7 +802,12 @@
         const action = parseVoiceToken(tokens, index);
         if (!action) continue;
 
-        actions.push(action);
+        if (action.type === "sequence") {
+          actions.push(...action.actions);
+        } else {
+          actions.push(action);
+        }
+
         if (action.step === 2) {
           index += 1;
         }
