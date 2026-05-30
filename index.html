@@ -1,390 +1,650 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Flechette Score</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Fléchette Score</title>
 
   <style>
-    *{
-      margin:0;
-      padding:0;
-      box-sizing:border-box;
-      -webkit-tap-highlight-color:transparent;
-      font-family:Arial, Helvetica, sans-serif;
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: rgba(255, 255, 255, .075);
+      --panel-strong: rgba(255, 255, 255, .12);
+      --line: rgba(255, 255, 255, .14);
+      --text: #f7f8fb;
+      --muted: rgba(247, 248, 251, .64);
+      --green: #28df76;
+      --green-deep: #058a4a;
+      --red: #ff4f5f;
+      --red-deep: #aa1025;
+      --blue: #57a5ff;
+      --blue-deep: #2155e8;
+      --gold: #ffd166;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .42);
+      --radius: 8px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    body{
-      background:#0f1115;
-      overflow:hidden;
-      touch-action:manipulation;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .app{
-      width:100%;
-      max-width:430px;
-      height:100svh;
-      margin:auto;
-      padding:12px 12px 8px;
-      display:flex;
-      flex-direction:column;
-      background:radial-gradient(circle at top,#1a1f29 0%,#0f1115 60%);
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      background: var(--bg);
+      overflow: hidden;
+      overscroll-behavior: none;
     }
 
-    .top{
-      height:238px;
-      display:flex;
-      flex-direction:column;
-      justify-content:flex-end;
-      align-items:center;
-      flex-shrink:0;
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      touch-action: manipulation;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: geometricPrecision;
     }
 
-    .history{
-      height:50px;
-      display:flex;
-      flex-direction:column;
-      justify-content:flex-end;
-      align-items:center;
-      font-size:19px;
-      line-height:1.05;
-      font-weight:900;
-      color:white;
-      text-align:center;
+    button {
+      font: inherit;
     }
 
-    .score{
-      margin-top:4px;
-      font-size:102px;
-      line-height:.86;
-      font-weight:900;
-      letter-spacing:-0.08em;
-      color:white;
-      text-shadow:0 8px 30px rgba(255,255,255,.12);
+    .app {
+      position: relative;
+      width: min(100vw, 460px);
+      height: 100svh;
+      min-height: 100svh;
+      margin: 0 auto;
+      padding: calc(10px + var(--safe-top)) 12px calc(10px + var(--safe-bottom));
+      display: grid;
+      grid-template-rows: minmax(208px, 29svh) minmax(0, 1fr) auto;
+      gap: 10px;
+      isolation: isolate;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, .07), transparent 32%),
+        radial-gradient(circle at 50% -8%, rgba(40, 223, 118, .24), transparent 34%),
+        radial-gradient(circle at 96% 18%, rgba(87, 165, 255, .22), transparent 28%),
+        linear-gradient(180deg, #141820 0%, #090b0e 100%);
     }
 
-    .current{
-      height:28px;
-      margin-top:14px;
-      font-size:21px;
-      line-height:1;
-      font-weight:900;
-      color:white;
-      text-align:center;
-      white-space:nowrap;
+    .app::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+      background-size: 24px 24px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.85), transparent 62%);
     }
 
-    .keyboard{
-      margin-top:18px;
-      margin-bottom:14px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
+    .scoreboard {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+      padding: 14px 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.055));
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.14);
+      overflow: hidden;
     }
 
-    .row{
-      display:grid;
-      grid-template-columns:repeat(4,1fr);
-      gap:8px;
+    .scoreboard::after {
+      content: "";
+      position: absolute;
+      inset: auto 14px 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent);
     }
 
-    .button{
-      height:54px;
-      border:none;
-      border-radius:18px;
-      color:white;
-      font-size:21px;
-      font-weight:900;
-      transition:
-        transform .035s ease-out,
-        filter .035s ease-out,
-        box-shadow .035s ease-out;
-      transform:scale(1);
-      cursor:pointer;
-      will-change:transform;
+    .status-row,
+    .meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
     }
 
-    .button:hover{
-      filter:brightness(1.06);
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(from 45deg, var(--red), var(--gold), var(--green), var(--blue), var(--red));
+      box-shadow: 0 0 18px rgba(40, 223, 118, .32);
+    }
+
+    .brand-mark::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #101318;
+      border: 1px solid rgba(255,255,255,.48);
+    }
+
+    .pill {
+      min-height: 30px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      background: rgba(0,0,0,.2);
+      color: rgba(247,248,251,.74);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .score-wrap {
+      display: grid;
+      place-items: center;
+      min-height: 0;
+      padding: 6px 0;
+    }
+
+    .score {
+      max-width: 100%;
+      font-size: clamp(84px, 27svh, 128px);
+      line-height: .84;
+      font-weight: 950;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      text-shadow: 0 16px 44px rgba(0, 0, 0, .54), 0 0 34px rgba(255,255,255,.1);
+      transform-origin: center;
+    }
+
+    .score.score-pop {
+      animation: scorePop .34s cubic-bezier(.16, 1, .3, 1);
+    }
+
+    @keyframes scorePop {
+      0% { transform: translateY(6px) scale(.94); filter: blur(2px); opacity: .72; }
+      100% { transform: translateY(0) scale(1); filter: blur(0); opacity: 1; }
+    }
+
+    .turn-line {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .turn-line strong {
+      color: var(--text);
+      font-weight: 900;
+    }
+
+    .hint {
+      color: rgba(247,248,251,.7);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .hint.warn {
+      color: var(--red);
+      animation: shake .24s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+
+    .keypad {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .spacer {
+      min-width: 0;
+    }
+
+    .button {
+      position: relative;
+      width: 100%;
+      min-width: 0;
+      min-height: 46px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: var(--radius);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: clamp(18px, 5.2vw, 22px);
+      font-weight: 950;
+      letter-spacing: 0;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      box-shadow: 0 12px 24px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.18);
+      transition: transform .09s ease, filter .09s ease, box-shadow .09s ease, opacity .16s ease;
+      overflow: hidden;
+    }
+
+    .button::before {
+      content: "";
+      position: absolute;
+      inset: 1px 1px auto;
+      height: 42%;
+      border-radius: calc(var(--radius) - 2px);
+      background: linear-gradient(180deg, rgba(255,255,255,.25), transparent);
+      opacity: .65;
+      pointer-events: none;
+    }
+
+    .button:focus-visible {
+      outline: 2px solid white;
+      outline-offset: 3px;
     }
 
     .button:active,
-    .button.pressed{
-      transform:scale(.86);
-      filter:brightness(1.32);
-      box-shadow:
-        inset 0 6px 18px rgba(0,0,0,.35);
+    .button.pressed {
+      transform: translateY(2px) scale(.96);
+      filter: brightness(1.08) saturate(1.06);
+      box-shadow: 0 6px 16px rgba(0,0,0,.2), inset 0 8px 20px rgba(0,0,0,.24);
     }
 
-    .green{
-      background:linear-gradient(to bottom,#34d058,#179637);
-      border:1px solid #53ef78;
-      box-shadow:
-        0 10px 25px rgba(20,140,50,.45),
-        inset 0 1px 0 rgba(255,255,255,.3);
+    .green {
+      background: linear-gradient(180deg, #36e982, var(--green-deep));
     }
 
-    .red{
-      background:linear-gradient(to bottom,#ff4d5d,#d90019);
-      border:1px solid #ff7b87;
-      box-shadow:
-        0 10px 25px rgba(255,0,50,.4),
-        inset 0 1px 0 rgba(255,255,255,.25);
+    .red {
+      background: linear-gradient(180deg, #ff6a78, var(--red-deep));
     }
 
-    .blue{
-      background:linear-gradient(to bottom,#4f4dff,#1600d8);
-      border:1px solid #7f84ff;
-      box-shadow:
-        0 14px 30px rgba(40,50,255,.4),
-        inset 0 1px 0 rgba(255,255,255,.25);
+    .blue {
+      background: linear-gradient(180deg, #72b5ff, var(--blue-deep));
     }
 
-    .erase{
-      font-size:38px;
+    .gold {
+      background: linear-gradient(180deg, #ffe08b, #c88113);
+      color: #1b1203;
     }
 
-    .bottom{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:8px;
-      margin-top:0;
+    .erase {
+      font-size: clamp(26px, 7.3vw, 34px);
+      padding-bottom: 2px;
     }
 
-    .bottom .button{
-      height:58px;
-      border-radius:20px;
+    .actions {
+      display: grid;
+      grid-template-columns: .92fr 1.08fr;
+      gap: 8px;
+      min-height: 58px;
     }
 
-    .new-game{
-      font-size:16px;
+    .actions .button {
+      min-height: 58px;
+      font-size: clamp(15px, 4vw, 18px);
     }
 
-    .enter{
-      font-size:24px;
+    .enter {
+      font-size: clamp(20px, 5.2vw, 24px) !important;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-height: 760px) {
+      .app {
+        grid-template-rows: minmax(184px, 27svh) minmax(0, 1fr) auto;
+        gap: 8px;
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .scoreboard {
+        padding: 12px;
+      }
+
+      .keypad,
+      .row,
+      .actions {
+        gap: 7px;
+      }
+
+      .button {
+        min-height: 42px;
+      }
+
+      .actions,
+      .actions .button {
+        min-height: 52px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+      }
     }
   </style>
 </head>
 
 <body>
+  <main class="app" aria-label="Compteur de score fléchette">
+    <section class="scoreboard" aria-live="polite">
+      <div class="status-row">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span> Fléchette</div>
+        <div class="pill" id="lastThrow">301 départ</div>
+      </div>
 
-<div class="app">
+      <div class="score-wrap">
+        <div class="score" id="score">301</div>
+      </div>
 
-  <div class="top">
+      <div class="meta-row">
+        <div class="turn-line" id="current">Tour vide</div>
+        <div class="hint" id="hint">Reste 301</div>
+      </div>
+    </section>
 
-    <div class="history" id="history"></div>
+    <section class="keypad" aria-label="Clavier de points">
+      <div class="row">
+        <div class="spacer" aria-hidden="true"></div>
+        <button class="button gold" type="button" data-value="25" aria-label="Ajouter 25 points">25</button>
+        <button class="button gold" type="button" data-value="50" aria-label="Ajouter 50 points">50</button>
+        <button class="button red erase" type="button" data-action="erase" aria-label="Effacer ou annuler">←</button>
+      </div>
 
-    <div class="score" id="score">
-      301
-    </div>
+      <div class="row">
+        <button class="button green" type="button" data-value="1">1</button>
+        <button class="button green" type="button" data-value="6">6</button>
+        <button class="button green" type="button" data-value="11">11</button>
+        <button class="button green" type="button" data-value="16">16</button>
+      </div>
 
-    <div class="current" id="current"></div>
+      <div class="row">
+        <button class="button green" type="button" data-value="2">2</button>
+        <button class="button green" type="button" data-value="7">7</button>
+        <button class="button green" type="button" data-value="12">12</button>
+        <button class="button green" type="button" data-value="17">17</button>
+      </div>
 
-  </div>
+      <div class="row">
+        <button class="button green" type="button" data-value="3">3</button>
+        <button class="button green" type="button" data-value="8">8</button>
+        <button class="button green" type="button" data-value="13">13</button>
+        <button class="button green" type="button" data-value="18">18</button>
+      </div>
 
-  <div class="keyboard">
+      <div class="row">
+        <button class="button green" type="button" data-value="4">4</button>
+        <button class="button green" type="button" data-value="9">9</button>
+        <button class="button green" type="button" data-value="14">14</button>
+        <button class="button green" type="button" data-value="19">19</button>
+      </div>
 
-    <div class="row">
-      <div></div>
+      <div class="row">
+        <button class="button green" type="button" data-value="5">5</button>
+        <button class="button green" type="button" data-value="10">10</button>
+        <button class="button green" type="button" data-value="15">15</button>
+        <button class="button green" type="button" data-value="20">20</button>
+      </div>
+    </section>
 
-      <button class="button green" onclick="addValue(25)">
-        25
-      </button>
+    <section class="actions" aria-label="Actions">
+      <button class="button red" type="button" data-action="new">Nouvelle partie</button>
+      <button class="button blue enter" type="button" data-action="enter">Entrée</button>
+    </section>
+  </main>
 
-      <button class="button green" onclick="addValue(50)">
-        50
-      </button>
+  <script>
+    const START_SCORE = 301;
+    const MAX_VALUES = 9;
 
-      <button class="button red erase" onclick="eraseValue()">
-        ←
-      </button>
-    </div>
+    let score = START_SCORE;
+    let currentThrow = [];
+    let history = null;
+    let displayedScore = START_SCORE;
+    let scoreAnimation = null;
 
-    <div class="row">
-      <button class="button green" onclick="addValue(1)">1</button>
-      <button class="button green" onclick="addValue(6)">6</button>
-      <button class="button green" onclick="addValue(11)">11</button>
-      <button class="button green" onclick="addValue(16)">16</button>
-    </div>
+    const scoreEl = document.getElementById("score");
+    const currentEl = document.getElementById("current");
+    const lastThrowEl = document.getElementById("lastThrow");
+    const hintEl = document.getElementById("hint");
 
-    <div class="row">
-      <button class="button green" onclick="addValue(2)">2</button>
-      <button class="button green" onclick="addValue(7)">7</button>
-      <button class="button green" onclick="addValue(12)">12</button>
-      <button class="button green" onclick="addValue(17)">17</button>
-    </div>
+    const supportsFineHaptics = "vibrate" in navigator;
 
-    <div class="row">
-      <button class="button green" onclick="addValue(3)">3</button>
-      <button class="button green" onclick="addValue(8)">8</button>
-      <button class="button green" onclick="addValue(13)">13</button>
-      <button class="button green" onclick="addValue(18)">18</button>
-    </div>
+    function vibrate(pattern = 12) {
+      if (supportsFineHaptics) {
+        navigator.vibrate(pattern);
+      }
+    }
 
-    <div class="row">
-      <button class="button green" onclick="addValue(4)">4</button>
-      <button class="button green" onclick="addValue(9)">9</button>
-      <button class="button green" onclick="addValue(14)">14</button>
-      <button class="button green" onclick="addValue(19)">19</button>
-    </div>
+    function sum(values) {
+      return values.reduce((total, value) => total + value, 0);
+    }
 
-    <div class="row">
-      <button class="button green" onclick="addValue(5)">5</button>
-      <button class="button green" onclick="addValue(10)">10</button>
-      <button class="button green" onclick="addValue(15)">15</button>
-      <button class="button green" onclick="addValue(20)">20</button>
-    </div>
+    function formatThrow(values) {
+      return values.length ? values.join(" - ") : "";
+    }
 
-  </div>
+    function animateScore(nextScore) {
+      if (scoreAnimation) {
+        cancelAnimationFrame(scoreAnimation);
+      }
 
-  <div class="bottom">
+      const startScore = displayedScore;
+      const delta = nextScore - startScore;
+      const startTime = performance.now();
+      const duration = Math.min(520, Math.max(220, Math.abs(delta) * 11));
 
-    <button class="button red new-game" onclick="newGame()">
-      Nouvelle Partie
-    </button>
+      scoreEl.classList.remove("score-pop");
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add("score-pop");
 
-    <button class="button blue enter" onclick="enterThrow()">
-      Entrée
-    </button>
+      function tick(now) {
+        const progress = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        displayedScore = Math.round(startScore + delta * eased);
+        scoreEl.textContent = displayedScore;
 
-  </div>
+        if (progress < 1) {
+          scoreAnimation = requestAnimationFrame(tick);
+        } else {
+          displayedScore = nextScore;
+          scoreEl.textContent = nextScore;
+          scoreAnimation = null;
+        }
+      }
 
-</div>
+      scoreAnimation = requestAnimationFrame(tick);
+    }
 
-<script>
+    function setWarning(message) {
+      hintEl.textContent = message;
+      hintEl.classList.remove("warn");
+      void hintEl.offsetWidth;
+      hintEl.classList.add("warn");
+      window.setTimeout(() => hintEl.classList.remove("warn"), 280);
+    }
 
-let score = 301;
-let currentThrow = [];
-let history = null;
+    function updateUI(options = {}) {
+      const total = sum(currentThrow);
+      const projectedScore = score - total;
 
-const scoreEl = document.getElementById("score");
-const currentEl = document.getElementById("current");
-const historyEl = document.getElementById("history");
+      if (options.animateScore) {
+        animateScore(score);
+      } else {
+        displayedScore = score;
+        scoreEl.textContent = score;
+      }
 
-function vibrate(){
-  if(navigator.vibrate){
-    navigator.vibrate(12);
-  }
-}
+      currentEl.innerHTML = currentThrow.length
+        ? `Tour <strong>-${formatThrow(currentThrow)}</strong> · total ${total}`
+        : "Tour vide";
 
-function updateUI(){
+      if (history) {
+        lastThrowEl.textContent = `Dernier -${formatThrow(history.values)} = ${history.total}`;
+      } else {
+        lastThrowEl.textContent = score === START_SCORE ? `${START_SCORE} départ` : "Aucun lancer";
+      }
 
-  scoreEl.innerText = score;
+      if (projectedScore < 0) {
+        hintEl.textContent = `Trop haut de ${Math.abs(projectedScore)}`;
+        hintEl.classList.add("warn");
+      } else if (currentThrow.length) {
+        hintEl.textContent = `Reste ${projectedScore}`;
+        hintEl.classList.remove("warn");
+      } else if (score === 0) {
+        hintEl.textContent = "Partie gagnée";
+        hintEl.classList.remove("warn");
+      } else {
+        hintEl.textContent = `Reste ${score}`;
+        hintEl.classList.remove("warn");
+      }
+    }
 
-  currentEl.innerText =
-    currentThrow.length > 0
-      ? "-" + currentThrow.join("-")
-      : "";
+    function addValue(value) {
+      vibrate(10);
 
-  if(history){
-    historyEl.innerHTML = `
-      <div>${history.line}</div>
-      <div>= ${history.total}</div>
-    `;
-  }else{
-    historyEl.innerHTML = "";
-  }
-}
+      if (currentThrow.length >= MAX_VALUES) {
+        setWarning("Maximum atteint");
+        vibrate([8, 28, 8]);
+        return;
+      }
 
-function addValue(value){
+      currentThrow.push(value);
+      updateUI();
+    }
 
-  vibrate();
+    function enterThrow() {
+      vibrate(16);
 
-  if(currentThrow.length >= 9){
-    return;
-  }
+      if (currentThrow.length === 0) {
+        setWarning("Ajoute un score");
+        return;
+      }
 
-  currentThrow.push(value);
+      const total = sum(currentThrow);
 
-  updateUI();
-}
+      if (total > score) {
+        setWarning("Score impossible");
+        vibrate([10, 34, 10]);
+        return;
+      }
 
-function enterThrow(){
+      score -= total;
+      history = {
+        total,
+        values: [...currentThrow]
+      };
+      currentThrow = [];
+      updateUI({ animateScore: true });
+    }
 
-  vibrate();
+    function eraseValue() {
+      vibrate(8);
 
-  if(currentThrow.length === 0){
-    return;
-  }
+      if (currentThrow.length > 0) {
+        currentThrow.pop();
+        updateUI();
+        return;
+      }
 
-  const total =
-    currentThrow.reduce((a,b)=>a+b,0);
+      if (history) {
+        score += history.total;
+        currentThrow = [...history.values];
+        history = null;
+        updateUI({ animateScore: true });
+        return;
+      }
 
-  if(total > score){
-    return;
-  }
+      setWarning("Rien à effacer");
+    }
 
-  score -= total;
+    function newGame() {
+      vibrate([12, 28, 12]);
+      score = START_SCORE;
+      currentThrow = [];
+      history = null;
+      updateUI({ animateScore: true });
+    }
 
-  history = {
-    line:"-" + currentThrow.join("-"),
-    total:total,
-    values:[...currentThrow]
-  };
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
 
-  currentThrow = [];
+      const value = button.dataset.value;
+      const action = button.dataset.action;
 
-  updateUI();
-}
+      if (value) addValue(Number(value));
+      if (action === "erase") eraseValue();
+      if (action === "enter") enterThrow();
+      if (action === "new") newGame();
+    });
 
-function eraseValue(){
+    document.querySelectorAll(".button").forEach((button) => {
+      const release = () => window.setTimeout(() => button.classList.remove("pressed"), 70);
 
-  vibrate();
-
-  if(currentThrow.length > 0){
-
-    currentThrow.pop();
+      button.addEventListener("pointerdown", () => button.classList.add("pressed"));
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointerleave", release);
+      button.addEventListener("pointercancel", () => button.classList.remove("pressed"));
+    });
 
     updateUI();
-
-    return;
-  }
-
-  if(history){
-
-    score += history.total;
-
-    currentThrow = [...history.values];
-
-    history = null;
-
-    updateUI();
-  }
-}
-
-function newGame(){
-
-  vibrate();
-
-  score = 301;
-
-  currentThrow = [];
-
-  history = null;
-
-  updateUI();
-}
-
-
-document.querySelectorAll(".button").forEach((button) => {
-  button.addEventListener("touchstart", () => {
-    button.classList.add("pressed");
-  }, { passive:true });
-
-  button.addEventListener("touchend", () => {
-    setTimeout(() => {
-      button.classList.remove("pressed");
-    }, 35);
-  });
-
-  button.addEventListener("touchcancel", () => {
-    button.classList.remove("pressed");
-  });
-});
-
-updateUI();
-
-</script>
-
+  </script>
 </body>
 </html>
+
+
