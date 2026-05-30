@@ -768,7 +768,7 @@
     function speak(text, options = {}) {
       if (!text) return false;
 
-      const { resumeListening = true, restartDelay = 900 } = options;
+      const { resumeListening = true, restartDelay = 900, onFinish = null } = options;
 
       if (!speechSynthesisSupported || typeof SpeechSynthesisUtterance === "undefined") {
         if (resumeListening && voiceEnabled) {
@@ -801,11 +801,18 @@
         utterance.voice = preferredVoice;
       }
 
+      let speechCycleFinished = false;
+
       const finishSpeechCycle = () => {
+        if (speechCycleFinished) return;
+        speechCycleFinished = true;
         window.clearTimeout(speechResumeTimer);
         voicePausedForSpeech = false;
         if (resumeListening && voiceEnabled) {
           scheduleVoiceRestart(restartDelay);
+        }
+        if (typeof onFinish === "function") {
+          onFinish();
         }
       };
 
@@ -926,17 +933,30 @@
       }
 
       voiceEnabled = true;
+      voiceArmed = false;
       window.localStorage.setItem("voiceWakeEnabled", "1");
-      try {
-        unlockSpeechSynthesis();
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-        }
-        voiceRecognition.start();
-      } catch (error) {
-        updateVoiceUI("error");
-      }
       updateVoiceUI();
+
+      const beginListening = () => {
+        try {
+          if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+          }
+          voiceRecognition.start();
+        } catch (error) {
+          updateVoiceUI("error");
+        }
+      };
+
+      unlockSpeechSynthesis();
+      const spoke = speak("Score activé.", {
+        resumeListening: false,
+        onFinish: beginListening
+      });
+
+      if (!spoke) {
+        scheduleVoiceRestart(250);
+      }
     }
 
     function stopVoiceRecognition() {
