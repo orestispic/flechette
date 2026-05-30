@@ -615,6 +615,7 @@
     let voiceArmed = false;
     let voicePausedForSpeech = false;
     let voiceRestartTimer = null;
+    let speechResumeTimer = null;
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
     const lastThrowEl = document.getElementById("lastThrow");
@@ -718,9 +719,16 @@
     }
 
     function speak(text, options = {}) {
-      if (!speechSynthesisSupported || !text) return;
+      if (!text) return false;
 
-      const { resumeListening = true } = options;
+      const { resumeListening = true, restartDelay = 900 } = options;
+
+      if (!speechSynthesisSupported || typeof SpeechSynthesisUtterance === "undefined") {
+        if (resumeListening && voiceEnabled) {
+          scheduleVoiceRestart(restartDelay);
+        }
+        return false;
+      }
 
       if (voiceRecognition && voiceListening) {
         voicePausedForSpeech = true;
@@ -731,24 +739,30 @@
         }
       }
 
+      window.clearTimeout(speechResumeTimer);
       window.speechSynthesis.cancel();
+      if (typeof window.speechSynthesis.resume === "function") {
+        window.speechSynthesis.resume();
+      }
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "fr-FR";
       utterance.rate = 1;
       utterance.pitch = 1;
-      utterance.onend = () => {
+      utterance.volume = 1;
+
+      const finishSpeechCycle = () => {
+        window.clearTimeout(speechResumeTimer);
         voicePausedForSpeech = false;
         if (resumeListening && voiceEnabled) {
-          scheduleVoiceRestart();
+          scheduleVoiceRestart(restartDelay);
         }
       };
-      utterance.onerror = () => {
-        voicePausedForSpeech = false;
-        if (resumeListening && voiceEnabled) {
-          scheduleVoiceRestart();
-        }
-      };
+
+      utterance.onend = finishSpeechCycle;
+      utterance.onerror = finishSpeechCycle;
+      speechResumeTimer = window.setTimeout(finishSpeechCycle, Math.max(1800, text.length * 85));
       window.speechSynthesis.speak(utterance);
+      return true;
     }
 
     function parseVoiceToken(tokens, index) {
@@ -841,7 +855,7 @@
       return actions;
     }
 
-    function scheduleVoiceRestart() {
+    function scheduleVoiceRestart(delay = 650) {
       if (!voiceEnabled || !voiceRecognition) return;
 
       window.clearTimeout(voiceRestartTimer);
@@ -851,7 +865,7 @@
         } catch (error) {
           updateVoiceUI("error");
         }
-      }, 420);
+      }, delay);
     }
 
     function startVoiceRecognition() {
@@ -878,6 +892,7 @@
       voiceListening = false;
       voiceArmed = false;
       window.clearTimeout(voiceRestartTimer);
+      window.clearTimeout(speechResumeTimer);
       window.localStorage.removeItem("voiceWakeEnabled");
       if (voiceRecognition) {
         try {
@@ -960,14 +975,14 @@
           enterThrow();
           voiceArmed = false;
           updateVoiceUI();
-          speak(`${announcedValues}. ${announcedTotal} points entrés. Nouveau score ${score}.`);
+          speak(`${announcedValues}. ${announcedTotal} points entrés. Nouveau score ${score}.`, { restartDelay: 1100 });
         }
       }
 
       if (hasValueInput && voiceArmed) {
         const currentTotal = sum(currentThrow);
         const projectedRemaining = score - currentTotal;
-        speak(`${formatThrow(currentThrow)}. Total ${currentTotal}. Il reste ${projectedRemaining}.`);
+        speak(`${formatThrow(currentThrow)}. Total ${currentTotal}. Il reste ${projectedRemaining}.`, { restartDelay: 1100 });
       }
     }
 
