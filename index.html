@@ -613,6 +613,7 @@
     let voiceEnabled = false;
     let voiceListening = false;
     let voiceArmed = false;
+    let voicePausedForSpeech = false;
     let voiceRestartTimer = null;
     const scoreEl = document.getElementById("score");
     const currentEl = document.getElementById("current");
@@ -681,7 +682,8 @@
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .replace(/[.,;:!?]/g, " ")
-        .replace(/-/g, " ")
+        .replace(/[-\u2010-\u2015]/g, " ")
+        .replace(/[']/g, " ")
         .replace(/\s+/g, " ")
         .trim();
     }
@@ -715,14 +717,37 @@
       }
     }
 
-    function speak(text) {
+    function speak(text, options = {}) {
       if (!speechSynthesisSupported || !text) return;
+
+      const { resumeListening = true } = options;
+
+      if (voiceRecognition && voiceListening) {
+        voicePausedForSpeech = true;
+        try {
+          voiceRecognition.stop();
+        } catch (error) {
+          voicePausedForSpeech = false;
+        }
+      }
 
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "fr-FR";
       utterance.rate = 1;
       utterance.pitch = 1;
+      utterance.onend = () => {
+        voicePausedForSpeech = false;
+        if (resumeListening && voiceEnabled) {
+          scheduleVoiceRestart();
+        }
+      };
+      utterance.onerror = () => {
+        voicePausedForSpeech = false;
+        if (resumeListening && voiceEnabled) {
+          scheduleVoiceRestart();
+        }
+      };
       window.speechSynthesis.speak(utterance);
     }
 
@@ -867,11 +892,12 @@
     function executeVoiceActions(actions) {
       if (!actions.length) return;
 
+      let hasValueInput = false;
+
       for (const action of actions) {
         if (action.type === "arm") {
           voiceArmed = true;
           updateVoiceUI();
-          speak("J'écoute.");
           continue;
         }
 
@@ -889,6 +915,7 @@
           }
 
           addValue(action.value);
+          hasValueInput = true;
           continue;
         }
 
@@ -935,6 +962,12 @@
           updateVoiceUI();
           speak(`${announcedValues}. ${announcedTotal} points entrés. Nouveau score ${score}.`);
         }
+      }
+
+      if (hasValueInput && voiceArmed) {
+        const currentTotal = sum(currentThrow);
+        const projectedRemaining = score - currentTotal;
+        speak(`${formatThrow(currentThrow)}. Total ${currentTotal}. Il reste ${projectedRemaining}.`);
       }
     }
 
@@ -1107,11 +1140,17 @@
       voiceRecognition.onend = () => {
         voiceListening = false;
         updateVoiceUI();
+        if (voicePausedForSpeech) {
+          return;
+        }
         scheduleVoiceRestart();
       };
 
       voiceRecognition.onerror = () => {
         voiceListening = false;
+        if (voicePausedForSpeech) {
+          return;
+        }
         updateVoiceUI("error");
         scheduleVoiceRestart();
       };
