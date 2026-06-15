@@ -608,6 +608,7 @@
 
     let score = START_SCORE;
     let currentThrow = [];
+    let currentThrowSpeech = [];
     let history = null;
     let displayedScore = START_SCORE;
     let scoreAnimation = null;
@@ -964,7 +965,7 @@
       if (compactLeft) {
         const actions = buildRepeatedValueActions(Number(compactLeft[1]), Number(compactLeft[2]));
         if (actions) {
-          return { type: "sequence", actions, step: 1 };
+          return { type: "sequence", actions, spokenText: `triple ${compactLeft[1]}`, step: 1 };
         }
       }
 
@@ -972,7 +973,7 @@
       if (compactRight) {
         const actions = buildRepeatedValueActions(Number(compactRight[2]), Number(compactRight[1]));
         if (actions) {
-          return { type: "sequence", actions, step: 1 };
+          return { type: "sequence", actions, spokenText: `triple ${compactRight[2]}`, step: 1 };
         }
       }
 
@@ -984,14 +985,14 @@
           if (rightValue === 2 || rightValue === 3) {
             const actions = buildRepeatedValueActions(leftValue, rightValue);
             if (actions) {
-              return { type: "sequence", actions, step: 3 };
+              return { type: "sequence", actions, spokenText: rightValue === 2 ? `double ${leftValue}` : `triple ${leftValue}`, step: 3 };
             }
           }
 
           if (leftValue === 2 || leftValue === 3) {
             const actions = buildRepeatedValueActions(rightValue, leftValue);
             if (actions) {
-              return { type: "sequence", actions, step: 3 };
+              return { type: "sequence", actions, spokenText: leftValue === 2 ? `double ${rightValue}` : `triple ${rightValue}`, step: 3 };
             }
           }
         }
@@ -1002,7 +1003,7 @@
         if (doubledValue !== null) {
           const actions = buildRepeatedValueActions(doubledValue, 2);
           if (actions) {
-            return { type: "sequence", actions, step: 2 };
+            return { type: "sequence", actions, spokenText: `double ${doubledValue}`, step: 2 };
           }
         }
       }
@@ -1012,7 +1013,7 @@
         if (tripledValue !== null) {
           const actions = buildRepeatedValueActions(tripledValue, 3);
           if (actions) {
-            return { type: "sequence", actions, step: 2 };
+            return { type: "sequence", actions, spokenText: `triple ${tripledValue}`, step: 2 };
           }
         }
       }
@@ -1031,11 +1032,7 @@
         const action = parseRepeatExpression(tokens, index) || parseVoiceToken(tokens, index);
         if (!action) continue;
 
-        if (action.type === "sequence") {
-          actions.push(...action.actions);
-        } else {
-          actions.push(action);
-        }
+        actions.push(action);
 
         if (action.step && action.step > 1) {
           index += action.step - 1;
@@ -1162,7 +1159,30 @@
             return;
           }
 
-          addValue(action.value);
+          addValue(action.value, String(action.value));
+          continue;
+        }
+
+        if (action.type === "sequence") {
+          if (!voiceArmed) {
+            continue;
+          }
+
+          const availableSlots = MAX_VALUES - currentThrow.length;
+          if (availableSlots < action.actions.length) {
+            setWarning("Maximum atteint");
+            flashCurrentWarning();
+            return;
+          }
+
+          action.actions.forEach((sequenceAction) => {
+            addValue(sequenceAction.value, null, true);
+          });
+          currentThrowSpeech.push({
+            text: action.spokenText || action.actions.map((item) => item.value).join("+"),
+            count: action.actions.length,
+            value: action.actions[0]?.value ?? null
+          });
           continue;
         }
 
@@ -1191,7 +1211,7 @@
             continue;
           }
 
-          const announcedValues = formatSpokenThrow(currentThrow);
+          const announcedValues = formatSpokenThrow(currentThrow, currentThrowSpeech);
           const announcedTotal = sum(currentThrow);
           const remainingAfter = score - announcedTotal;
 
@@ -1219,19 +1239,15 @@
       return values.length ? values.join("+") : "";
     }
 
-    function formatSpokenThrow(values) {
+    function formatSpokenThrow(values, speechParts = []) {
       if (!values.length) return "";
-
-      const allSame = values.every((value) => value === values[0]);
-      if (allSame && values.length === 2) {
-        return `double ${values[0]}`;
-      }
-
-      if (allSame && values.length === 3) {
-        return `triple ${values[0]}`;
-      }
-
-      return formatThrow(values);
+      if (!speechParts.length) return formatThrow(values);
+      return speechParts.map((part) => {
+        if (part.count <= 1 && part.value !== null && part.value !== undefined) {
+          return String(part.value);
+        }
+        return part.text;
+      }).join(" + ");
     }
 
     function animateScore(nextScore) {
@@ -1317,7 +1333,7 @@
       }
     }
 
-    function addValue(value) {
+    function addValue(value, spokenText = null, skipSpeechTrack = false) {
       vibrate(10);
 
       if (currentThrow.length >= MAX_VALUES) {
@@ -1328,6 +1344,13 @@
       }
 
       currentThrow.push(value);
+      if (!skipSpeechTrack) {
+        currentThrowSpeech.push({
+          text: spokenText || String(value),
+          count: 1,
+          value
+        });
+      }
       updateUI();
     }
 
@@ -1350,9 +1373,11 @@
       score -= total;
       history = {
         total,
-        values: [...currentThrow]
+        values: [...currentThrow],
+        speech: currentThrowSpeech.map((part) => ({ ...part }))
       };
       currentThrow = [];
+      currentThrowSpeech = [];
       updateUI({ animateScore: true });
     }
 
@@ -1361,6 +1386,14 @@
 
       if (currentThrow.length > 0) {
         currentThrow.pop();
+        if (currentThrowSpeech.length > 0) {
+          const lastSpeech = currentThrowSpeech[currentThrowSpeech.length - 1];
+          if (lastSpeech.count > 1) {
+            lastSpeech.count -= 1;
+          } else {
+            currentThrowSpeech.pop();
+          }
+        }
         updateUI();
         return;
       }
@@ -1368,6 +1401,7 @@
       if (history) {
         score += history.total;
         currentThrow = [...history.values];
+        currentThrowSpeech = history.speech ? history.speech.map((part) => ({ ...part })) : [];
         history = null;
         updateUI({ animateScore: true });
         return;
@@ -1380,6 +1414,7 @@
       vibrate([12, 28, 12]);
       score = START_SCORE;
       currentThrow = [];
+      currentThrowSpeech = [];
       history = null;
       voiceArmed = false;
       updateVoiceUI();
