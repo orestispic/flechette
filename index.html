@@ -920,6 +920,106 @@
       return null;
     }
 
+    function parseSingleVoiceValueToken(token) {
+      if (!token) return null;
+
+      if (DIRECT_NUMBER_COMMANDS[token] !== undefined) {
+        return DIRECT_NUMBER_COMMANDS[token];
+      }
+
+      if (/^\d$/.test(token)) {
+        return Number(token);
+      }
+
+      if (/^(1[0-9]|20|25|30|40|50|60)$/.test(token)) {
+        return Number(token);
+      }
+
+      if (NUMBER_WORDS[token] !== undefined) {
+        return NUMBER_WORDS[token];
+      }
+
+      return null;
+    }
+
+    function buildRepeatedValueActions(value, multiplier) {
+      if (!Number.isInteger(value) || !Number.isInteger(multiplier)) return null;
+      if (multiplier < 2 || multiplier > 3) return null;
+      if (value <= 0) return null;
+
+      return Array.from({ length: multiplier }, () => ({
+        type: "value",
+        value
+      }));
+    }
+
+    function parseRepeatExpression(tokens, index) {
+      const token = tokens[index];
+      const nextToken = tokens[index + 1] || "";
+      const thirdToken = tokens[index + 2] || "";
+
+      if (!token) return null;
+
+      const compactLeft = token.match(/^(\d+)[x*]([23])$/);
+      if (compactLeft) {
+        const actions = buildRepeatedValueActions(Number(compactLeft[1]), Number(compactLeft[2]));
+        if (actions) {
+          return { type: "sequence", actions, step: 1 };
+        }
+      }
+
+      const compactRight = token.match(/^([23])[x*](\d+)$/);
+      if (compactRight) {
+        const actions = buildRepeatedValueActions(Number(compactRight[2]), Number(compactRight[1]));
+        if (actions) {
+          return { type: "sequence", actions, step: 1 };
+        }
+      }
+
+      if (nextToken === "x" || nextToken === "*" || nextToken === "fois") {
+        const leftValue = parseSingleVoiceValueToken(token);
+        const rightValue = parseSingleVoiceValueToken(thirdToken);
+
+        if (leftValue !== null && rightValue !== null) {
+          if (rightValue === 2 || rightValue === 3) {
+            const actions = buildRepeatedValueActions(leftValue, rightValue);
+            if (actions) {
+              return { type: "sequence", actions, step: 3 };
+            }
+          }
+
+          if (leftValue === 2 || leftValue === 3) {
+            const actions = buildRepeatedValueActions(rightValue, leftValue);
+            if (actions) {
+              return { type: "sequence", actions, step: 3 };
+            }
+          }
+        }
+      }
+
+      if (["double", "doubler"].includes(token)) {
+        const doubledValue = parseSingleVoiceValueToken(nextToken);
+        if (doubledValue !== null) {
+          const actions = buildRepeatedValueActions(doubledValue, 2);
+          if (actions) {
+            return { type: "sequence", actions, step: 2 };
+          }
+        }
+      }
+
+      if (["triple", "tripler"].includes(token)) {
+        const tripledValue = parseSingleVoiceValueToken(nextToken);
+        if (tripledValue !== null) {
+          const actions = buildRepeatedValueActions(tripledValue, 3);
+          if (actions) {
+            return { type: "sequence", actions, step: 2 };
+          }
+        }
+      }
+
+      return null;
+    }
+
     function parseVoicePhrase(rawText) {
       const normalized = normalizeVoiceText(rawText);
       if (!normalized) return [];
@@ -928,7 +1028,7 @@
       const actions = [];
 
       for (let index = 0; index < tokens.length; index += 1) {
-        const action = parseVoiceToken(tokens, index);
+        const action = parseRepeatExpression(tokens, index) || parseVoiceToken(tokens, index);
         if (!action) continue;
 
         if (action.type === "sequence") {
@@ -937,8 +1037,8 @@
           actions.push(action);
         }
 
-        if (action.step === 2) {
-          index += 1;
+        if (action.step && action.step > 1) {
+          index += action.step - 1;
         }
       }
 
