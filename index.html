@@ -601,6 +601,7 @@
     </section>
   </main>
 
+  <script type="module" src="./capacitor-bridge.js"></script>
   <script>
     const START_SCORE = 301;
     const MAX_VALUES = 9;
@@ -627,9 +628,18 @@
 
     const supportsFineHaptics = typeof navigator.vibrate === "function";
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-    const supportsVoiceRecognition = typeof SpeechRecognitionCtor === "function";
-    const voiceRecognition = supportsVoiceRecognition ? new SpeechRecognitionCtor() : null;
+    const webSpeechRecognitionSupported = typeof SpeechRecognitionCtor === "function";
+    const voiceRecognition = webSpeechRecognitionSupported ? new SpeechRecognitionCtor() : null;
     const speechSynthesisSupported = "speechSynthesis" in window;
+
+    function getNativeVoiceBridge() {
+      const bridge = window.NativeVoiceBridge;
+      return bridge && bridge.isNative ? bridge : null;
+    }
+
+    function supportsVoiceRecognitionNow() {
+      return Boolean(getNativeVoiceBridge()) || webSpeechRecognitionSupported;
+    }
 
     const NUMBER_WORDS = {
       zero: 0,
@@ -719,7 +729,7 @@
       voiceToggleEl.classList.remove("listening", "error");
       voiceToggleEl.setAttribute("aria-pressed", voiceEnabled ? "true" : "false");
 
-      if (!supportsVoiceRecognition) {
+      if (!supportsVoiceRecognitionNow()) {
         voiceLabelEl.textContent = "Score indispo";
         voiceToggleEl.classList.add("error");
         voiceToggleEl.disabled = true;
@@ -769,6 +779,28 @@
       if (!text) return false;
 
       const { resumeListening = true, restartDelay = 900, onFinish = null } = options;
+      const nativeBridge = getNativeVoiceBridge();
+
+      if (nativeBridge) {
+        voicePausedForSpeech = true;
+        window.clearTimeout(speechResumeTimer);
+
+        const finishSpeechCycle = () => {
+          window.clearTimeout(speechResumeTimer);
+          voicePausedForSpeech = false;
+          if (resumeListening && voiceEnabled) {
+            scheduleVoiceRestart(restartDelay);
+          }
+          if (typeof onFinish === "function") {
+            onFinish();
+          }
+        };
+
+        speechResumeTimer = window.setTimeout(finishSpeechCycle, Math.max(1800, text.length * 90));
+        nativeBridge.stopListening().catch(() => {});
+        nativeBridge.speak(text).catch(finishSpeechCycle);
+        return true;
+      }
 
       if (!speechSynthesisSupported || typeof SpeechSynthesisUtterance === "undefined") {
         if (resumeListening && voiceEnabled) {
@@ -914,10 +946,29 @@
     }
 
     function scheduleVoiceRestart(delay = 650) {
-      if (!voiceEnabled || !voiceRecognition) return;
+      if (!voiceEnabled) return;
 
       window.clearTimeout(voiceRestartTimer);
       voiceRestartTimer = window.setTimeout(() => {
+        const nativeBridge = getNativeVoiceBridge();
+
+        if (nativeBridge) {
+          nativeBridge.startListening((text) => {
+            executeVoiceActions(parseVoicePhrase(text));
+          }).then(() => {
+            voiceListening = true;
+            updateVoiceUI();
+          }).catch(() => {
+            updateVoiceUI("error");
+          });
+          return;
+        }
+
+        if (!voiceRecognition) {
+          updateVoiceUI("error");
+          return;
+        }
+
         try {
           voiceRecognition.start();
         } catch (error) {
@@ -927,7 +978,7 @@
     }
 
     function startVoiceRecognition() {
-      if (!voiceRecognition) {
+      if (!supportsVoiceRecognitionNow()) {
         updateVoiceUI("error");
         return;
       }
@@ -938,6 +989,20 @@
       updateVoiceUI();
 
       const beginListening = () => {
+        const nativeBridge = getNativeVoiceBridge();
+
+        if (nativeBridge) {
+          nativeBridge.startListening((text) => {
+            executeVoiceActions(parseVoicePhrase(text));
+          }).then(() => {
+            voiceListening = true;
+            updateVoiceUI();
+          }).catch(() => {
+            updateVoiceUI("error");
+          });
+          return;
+        }
+
         try {
           if (window.speechSynthesis) {
             window.speechSynthesis.cancel();
@@ -949,14 +1014,7 @@
       };
 
       unlockSpeechSynthesis();
-      const spoke = speak("Score activé.", {
-        resumeListening: false,
-        onFinish: beginListening
-      });
-
-      if (!spoke) {
-        scheduleVoiceRestart(250);
-      }
+      beginListening();
     }
 
     function stopVoiceRecognition() {
@@ -966,6 +1024,12 @@
       window.clearTimeout(voiceRestartTimer);
       window.clearTimeout(speechResumeTimer);
       window.localStorage.removeItem("voiceWakeEnabled");
+
+      const nativeBridge = getNativeVoiceBridge();
+      if (nativeBridge) {
+        nativeBridge.stopListening().catch(() => {});
+      }
+
       if (voiceRecognition) {
         try {
           voiceRecognition.stop();
@@ -978,8 +1042,6 @@
 
     function executeVoiceActions(actions) {
       if (!actions.length) return;
-
-      let hasValueInput = false;
 
       for (const action of actions) {
         if (action.type === "arm") {
@@ -997,12 +1059,10 @@
           if (availableSlots <= 0) {
             setWarning("Maximum atteint");
             flashCurrentWarning();
-            speak("Maximum atteint.");
             return;
           }
 
           addValue(action.value);
-          hasValueInput = true;
           continue;
         }
 
@@ -1011,7 +1071,6 @@
             continue;
           }
           eraseValue();
-          speak("Effacé.");
           continue;
         }
 
@@ -1019,7 +1078,6 @@
           newGame();
           voiceArmed = false;
           updateVoiceUI();
-          speak("Nouvelle partie. Trois cent un points.");
           continue;
         }
 
@@ -1051,11 +1109,6 @@
         }
       }
 
-      if (hasValueInput && voiceArmed) {
-        const currentTotal = sum(currentThrow);
-        const projectedRemaining = score - currentTotal;
-        speak(`${formatThrow(currentThrow)}. Total ${currentTotal}. Il reste ${projectedRemaining}.`, { restartDelay: 1100 });
-      }
     }
 
     function sum(values) {
